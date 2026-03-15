@@ -1,39 +1,83 @@
 import streamlit as st
-import os
+import base64
 from typing import List
-from dotenv import load_dotenv
 from openai import OpenAI
-
-load_dotenv()
 
 cliente = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
+#===========================
+#CHAT NORMAL
+#===========================
 def obter_resposta_ia(historico_conversa: List[dict]) -> str:
-    try:
-        entrada = [
+
+    entrada = [
+        {
+            "role": "system",
+            "content": (
+                "Você é um assistente virtual profissional."
+                "Responda sempre em português do Brasil."
+            )
+        }
+    ]
+
+    for mensagem in historico_conversa:
+
+        if mensagem["tipo"] == "assistant":
+            papel = "assistant"
+        else:
+            papel = ("user")
+
+        entrada.append({
+            "role": papel,
+        "content": mensagem["conteudo"]
+        })
+
+    resposta = cliente.responses.create(
+        model="gpt-5.2",
+        input=entrada
+    )
+
+    return resposta.output_text
+
+
+# ============================
+# ANALISAR IMAGENS
+#=============================
+def analisar_imagem(caminho_imagem: str, pergunta_usuario: str) -> str:
+
+    with open(caminho_imagem, "rb") as arquivo:
+        imagem_base64 = base64.b64encode(arquivo.read()).decode("utf-8")
+
+    resposta = cliente.responses.create(
+        model="gpt-5.2",
+        input=[
             {
-                "role": "system",
-                "content": (
-                    "Você é um assistente virtual profissional, útil e objetivo."
-                    "Responda sempre em português do Brasil. "
-                    "Explique de forma clara, organizada e amigavel."
-                )
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": pergunta_usuario
+                    },
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:image/png;base64,{imagem_base64}"
+                    }
+                ]
             }
         ]
+    )
 
-        for mensagem in historico_conversa:
-            papel = "assistant" if mensagem["tipo"] == "assistant" else "user"
-            entrada.append({
-                "role": papel,
-                "content": mensagem["conteudo"]
-            })
+    return resposta.output_text
 
-        resposta = cliente.responses.create(
-            model="gpt-5.2",
-            input=entrada
-        )
+#==============================
+# GERAR IMAGENS
+#==============================
+def gerar_imagem(prompt_imagem: str) -> str:
 
-        return resposta.output_text
+    resultado = cliente.images.generate(
+        model="gpt-image-1",
+        prompt=prompt_imagem,
+        size="1024x1024"
+    )
 
-    except Exception as erro:
-        return f"Erro ao consultar a IA: {erro}"
+    return resultado.data[0].b64_json
